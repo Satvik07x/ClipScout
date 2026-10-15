@@ -1,0 +1,6 @@
+[
+  {"video": "Gate camera", "query": "white car parks near the gate", "start": 154, "end": 162, "type": "visual"},
+  {"video": "Gate camera", "query": "red bike wala aadmi kab aaya", "start": 410, "end": 418, "type": "visual"},
+  {"video": "DSA lecture", "query": "when does he explain the base case of recursion", "start": 1260, "end": 1310, "type": "speech"},
+  {"video": "DSA lecture", "query": "slide with the Big-O comparison table", "start": 2405, "end": 2440, "type": "on_screen_text"}
+]
