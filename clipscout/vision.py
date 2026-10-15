@@ -87,9 +87,9 @@ def verify_clip(src: VideoSource, start: float, end: float, question: str) -> di
         b = min(b, src.duration)
     b = max(b, a + 2)
     out = gemini_json(
-               [video_part(src, a, b, resolution="high"),   # short clip, so we can afford sharper frames
+        [video_part(src, a, b, resolution="high"),   # short clip, so we can afford sharper frames
          {"type": "text", "text": VERIFY_PROMPT.format(question=question, length=int(b - a))}],
-         VERIFY_SCHEMA,
+        VERIFY_SCHEMA,
     )
     best = to_absolute(float(out.get("best_second", 0) or 0), a, b - a)
     return {"present": bool(out.get("present")), "reason": str(out.get("reason", "")).strip(),

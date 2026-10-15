@@ -69,6 +69,7 @@ Free-tier inputs may be used by Google to improve its models, so index public vi
 
 | Method | Path | Does |
 |---|---|---|
+| GET | `/api/config` | Mode (local or public demo) and the demo limits |
 | GET | `/api/videos` | Library with indexing status and progress |
 | POST | `/api/videos/youtube` | Add a YouTube video; indexing runs in the background (202) |
 | POST | `/api/videos/upload` | Same for an uploaded file (multipart) |
@@ -76,6 +77,35 @@ Free-tier inputs may be used by Google to improve its models, so index public vi
 | DELETE | `/api/videos/{id}` | Remove a video and its index |
 | GET | `/api/videos/{id}/file` | Stream an uploaded file to the player (supports seeking) |
 | GET | `/api/search?q=…&video_id=…&verify=true` | Server-Sent Events: one event per agent step, then the answer |
+
+## Deploy (public demo)
+
+React on **Vercel**, FastAPI on **Render** (indexing is a long background job, which Vercel's serverless functions can't run).
+
+1. Push to GitHub.
+2. **Render** → New → Blueprint → pick the repo (it reads `render.yaml`). Add `GEMINI_API_KEY` and `GROQ_API_KEY`.
+   `CLIPSCOUT_CORS_ORIGINS` is filled in after step 3.
+3. **Vercel** → New Project → pick the repo, set **Root Directory** to `web`, add the variable
+   `VITE_API_URL` = your Render address (e.g. `https://clipscout-api.onrender.com`), deploy.
+4. Back in Render, set `CLIPSCOUT_CORS_ORIGINS` to the Vercel address (no trailing slash) and redeploy.
+
+`CLIPSCOUT_PUBLIC=1` turns on the public-demo rules, because everyone shares one free Gemini key:
+
+| Rule | Default | Env variable |
+|---|---|---|
+| Each browser sees only its own videos (random id, not a login) | on | |
+| Videos per visitor | 2 | `CLIPSCOUT_MAX_VIDEOS` |
+| Longest video | 5 min | `CLIPSCOUT_MAX_MINUTES` |
+| New videos Gemini may watch per 24 h, all visitors together | 10 | `CLIPSCOUT_DAILY_INDEXES` |
+| New videos per network (IP) per day | 3 | `CLIPSCOUT_ADDS_PER_IP` |
+| Searches per visitor per hour | 20 | `CLIPSCOUT_SEARCHES_PER_HOUR` |
+| Uploads | off | |
+
+A YouTube video someone already indexed is shared: the second visitor gets it instantly and uses no quota.
+
+Free-hosting facts ([Render docs](https://render.com/docs/free)): the server sleeps after 15 minutes without traffic and takes
+about a minute to wake (the page retries by itself), and its disk is wiped on every restart, so the library resets.
+That is fine for a demo; for durable storage the library would move to a database (Postgres) and the vectors to a hosted store.
 
 ## Evaluation
 
@@ -107,6 +137,8 @@ clipscout/            the AI core (everything that matters lives here)
   video.py            YouTube ids, file fingerprint, duration, Files API upload, clipping
   vision.py           the two Gemini tasks: describe_segment, verify_clip
   indexer.py          parallel, resumable indexing pipeline
+  limits.py           in-memory usage counters (public demo)
+  owners.py           which visitor keeps which video (public demo)
   library.py          one JSON per video (the "index once" cache), atomic writes
   search.py           Chroma + BM25 + RRF + clip merging
   agent.py            LangGraph agent: rewrite -> retrieve -> grade -> verify -> answer, + streaming

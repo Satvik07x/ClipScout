@@ -101,6 +101,7 @@ def video_part(src: VideoSource, start: float | None = None, end: float | None =
         part["processing"] = {"type": "static", "start_offset": f"{start:.0f}s", "end_offset": f"{end:.0f}s"}
     return part
 
+
 def to_absolute(t: float, clip_start: float, clip_len: float) -> float:
     """Gemini may report a time relative to the clip or to the whole video. Return whole-video seconds.
 

@@ -32,9 +32,24 @@ def test_request_shape(monkeypatch):
     assert req["response_format"] == {"type": "text", "mime_type": "application/json", "schema": {"type": "object"}}
 
 
-def test_retries_on_rate_limit(monkeypatch):
+def test_busy_model_hands_over_to_next_model(monkeypatch):
     inter = fake_client(monkeypatch, [Exception("429 RESOURCE_EXHAUSTED"), '{"n": 1}'])
-    assert llm.gemini_json([], {}) == {"n": 1} and len(inter.requests) == 2
+    assert llm.gemini_json([], {}) == {"n": 1}
+    assert [r["model"] for r in inter.requests] == ["model-a", "model-b"]   # no waiting on a busy model
+
+
+def test_waits_only_after_every_model_failed(monkeypatch):
+    waits = []
+    inter = fake_client(monkeypatch, [Exception("503 UNAVAILABLE"), Exception("429"), '{"n": 1}'])
+    monkeypatch.setattr(llm.time, "sleep", waits.append)
+    assert llm.gemini_json([], {}) == {"n": 1}
+    assert [r["model"] for r in inter.requests] == ["model-a", "model-b", "model-a"] and waits == [5]
+
+
+def test_gives_up_with_a_clear_message(monkeypatch):
+    fake_client(monkeypatch, [Exception("429")] * 8)
+    with pytest.raises(RuntimeError, match="busy or out of free quota"):
+        llm.gemini_json([], {})
 
 
 def test_falls_back_to_next_model(monkeypatch):

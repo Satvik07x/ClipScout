@@ -30,6 +30,9 @@ class BagOfWordsEmbeddings(Embeddings):
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
+    from clipscout.limits import limiter
+    limiter.reset()
+    monkeypatch.setattr(config, "DATA_DIR", str(tmp_path))            # owners.json lands in the temp folder
     monkeypatch.setattr(config, "LIBRARY_DIR", str(tmp_path / "library"))
     monkeypatch.setattr(config, "CHROMA_DIR", str(tmp_path / "chroma"))
     monkeypatch.setattr(config, "COLLECTION", f"test_{tmp_path.name}")

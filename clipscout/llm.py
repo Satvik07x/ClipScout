@@ -60,6 +60,8 @@ def with_retry(call: Callable[[str], T], models: list[str], max_rounds: int = 4)
             log.warning("all models busy, waiting %ss (round %d of %d)", wait, round_no + 1, max_rounds)
             time.sleep(wait)
     raise RuntimeError(f"Gemini is busy or out of free quota right now. Try again in a minute. ({last_error})")
+
+
 def gemini_json(parts: list[dict], schema: dict, *, system: str | None = None) -> dict:
     """Send video/text parts to Gemini; get back a dict that follows the JSON `schema`."""
     client = gemini_client()

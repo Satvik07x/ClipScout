@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { deleteVideo, formatTime, resumeIndexing } from "../api.js";
 
-export default function Library({ videos, scopeId, onSelect, onAdd, onChanged }) {
+export default function Library({ videos, scopeId, showAll = true, onSelect, onAdd, onChanged }) {
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState("");
 
@@ -35,12 +35,14 @@ export default function Library({ videos, scopeId, onSelect, onAdd, onChanged })
       </div>
 
       <ul className="library-list">
-        <li>
-          <button className={`lib-item ${scopeId === null ? "is-selected" : ""}`} onClick={() => onSelect(null)}>
-            <span className="lib-title">All videos</span>
-            <span className="lib-meta">{videos.filter((v) => v.status === "ready").length} ready</span>
-          </button>
-        </li>
+        {showAll && (
+          <li>
+            <button className={`lib-item ${scopeId === null ? "is-selected" : ""}`} onClick={() => onSelect(null)}>
+              <span className="lib-title">All videos</span>
+              <span className="lib-meta">{videos.filter((v) => v.status === "ready").length} ready</span>
+            </button>
+          </li>
+        )}
 
         {videos.map((v) => (
           <li key={v.video_id}>

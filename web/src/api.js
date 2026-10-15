@@ -1,7 +1,27 @@
 // All calls to the Python server live here. Components never call fetch directly.
 
+// Locally the Vite proxy forwards /api to the server. When the site is hosted somewhere else than the API
+// (Vercel + Render), VITE_API_URL holds the server's address.
+export const API = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+
+// A random id per browser. In the public demo it keeps each visitor's videos separate (not a login).
+let fallbackId = null;
+function visitorId() {
+  try {
+    let id = localStorage.getItem("clipscout-visitor");
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem("clipscout-visitor", id);
+    }
+    return id;
+  } catch {
+    fallbackId ??= crypto.randomUUID();
+    return fallbackId;
+  }
+}
+
 async function request(path, options = {}) {
-  const res = await fetch(path, options);
+  const res = await fetch(API + path, { ...options, headers: { ...options.headers, "X-Visitor": visitorId() } });
   if (!res.ok) {
     let detail = `Request failed (${res.status})`;
     try {
@@ -15,7 +35,12 @@ async function request(path, options = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-export const listVideos = () => request("/api/videos");
+export const getConfig = () => request("/api/config");
+
+export const listVideos = async () => {
+  const list = await request("/api/videos");
+  return list.map((v) => ({ ...v, file_url: v.file_url ? API + v.file_url : "" }));
+};
 
 export const addYouTube = (url, minutes, title) =>
   request("/api/videos/youtube", {
@@ -38,9 +63,9 @@ export const deleteVideo = (id) => request(`/api/videos/${id}`, { method: "DELET
 
 // Search streams one event per agent step (Server-Sent Events). Returns a function that cancels it.
 export function streamSearch({ q, videoId, verify }, onEvent) {
-  const params = new URLSearchParams({ q, verify: String(verify) });
+  const params = new URLSearchParams({ q, verify: String(verify), visitor: visitorId() });
   if (videoId) params.set("video_id", videoId);
-  const source = new EventSource(`/api/search?${params}`);
+  const source = new EventSource(`${API}/api/search?${params}`);
   source.onmessage = (msg) => {
     const event = JSON.parse(msg.data);
     if (event.type === "done" || event.type === "error") source.close(); // stop the browser auto-reconnecting
@@ -49,7 +74,7 @@ export function streamSearch({ q, videoId, verify }, onEvent) {
   source.onerror = () => {
     if (source.readyState !== EventSource.CLOSED) {
       source.close();
-      onEvent({ type: "error", message: "Lost connection to the server. Is it running on port 8000?" });
+      onEvent({ type: "error", message: "Lost connection to the server. If it was asleep, wait a minute and try again." });
     }
   };
   return () => source.close();

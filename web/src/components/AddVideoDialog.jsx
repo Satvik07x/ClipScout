@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { addYouTube, uploadVideo } from "../api.js";
 
-export default function AddVideoDialog({ onClose, onAdded }) {
+export default function AddVideoDialog({ cfg, onClose, onAdded }) {
   const [mode, setMode] = useState("youtube");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState(null);
@@ -39,9 +39,11 @@ export default function AddVideoDialog({ onClose, onAdded }) {
           <button type="button" role="tab" aria-selected={mode === "youtube"} onClick={() => setMode("youtube")}>
             YouTube link
           </button>
-          <button type="button" role="tab" aria-selected={mode === "file"} onClick={() => setMode("file")}>
-            Upload a file
-          </button>
+          {cfg.uploads && (
+            <button type="button" role="tab" aria-selected={mode === "file"} onClick={() => setMode("file")}>
+              Upload a file
+            </button>
+          )}
         </div>
 
         {mode === "youtube" ? (
@@ -63,8 +65,9 @@ export default function AddVideoDialog({ onClose, onAdded }) {
                 type="number"
                 required
                 min="0.1"
+                max={cfg.public ? cfg.max_minutes : undefined}
                 step="0.1"
-                placeholder="e.g. 8.5"
+                placeholder={cfg.public ? `up to ${cfg.max_minutes}` : "e.g. 8.5"}
                 value={minutes}
                 onChange={(e) => setMinutes(e.target.value)}
               />
@@ -89,7 +92,10 @@ export default function AddVideoDialog({ onClose, onAdded }) {
           <input placeholder="e.g. Gate camera, Monday" value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
 
-        <p className="note">Gemini watches the video once. Searches after that never re-watch it.</p>
+        <p className="note">
+          Gemini watches the video once. Searches after that never re-watch it.
+          {cfg.public && ` Public demo: up to ${cfg.max_minutes} minutes, ${cfg.max_videos} videos per visitor.`}
+        </p>
         {error && <p className="form-error">{error}</p>}
 
         <div className="dialog-actions">

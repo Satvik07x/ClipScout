@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listVideos, streamSearch } from "./api.js";
+import { API, getConfig, listVideos, streamSearch } from "./api.js";
 import Library from "./components/Library.jsx";
 import AddVideoDialog from "./components/AddVideoDialog.jsx";
 import SearchPanel from "./components/SearchPanel.jsx";
 import Player from "./components/Player.jsx";
 import Results from "./components/Results.jsx";
 
+const LOCAL = { public: false, uploads: true, max_videos: 0, max_minutes: 0, daily_left: 0 };
 const IDLE = { status: "idle", steps: [], clips: [], answer: "", found: false, query: "", latencyMs: 0, error: "" };
 
 export default function App() {
@@ -16,22 +17,37 @@ export default function App() {
   const [seek, setSeek] = useState({ t: 0, nonce: 0 });
   const [search, setSearch] = useState(IDLE);
   const [adding, setAdding] = useState(false);
+  const [cfg, setCfg] = useState(LOCAL);
   const cancelSearch = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
-      const list = await listVideos();
+      const [list, conf] = await Promise.all([listVideos(), getConfig()]);
       setVideos(list);
+      setCfg(conf);
       setLoadError("");
-      setActiveId((current) => current ?? list.find((v) => v.status === "ready")?.video_id ?? null);
+      const stillThere = (id) => list.some((v) => v.video_id === id);
+      setActiveId((cur) => (cur && stillThere(cur) ? cur : list.find((v) => v.status === "ready")?.video_id ?? null));
+      setScopeId((cur) => (cur && stillThere(cur) ? cur : null));
     } catch {
-      setLoadError("Can't reach the server. Start it with: uvicorn server:app --reload");
+      setLoadError(
+        API
+          ? "The server is waking up (free hosting sleeps when idle). This takes about a minute, the page retries by itself."
+          : "Can't reach the server. Start it with: uvicorn server:app --reload"
+      );
     }
   }, []);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Server unreachable (asleep, restarting): keep trying until it answers.
+  useEffect(() => {
+    if (!loadError) return;
+    const timer = setInterval(refresh, 5000);
+    return () => clearInterval(timer);
+  }, [loadError, refresh]);
 
   // While anything is indexing, ask the server for progress every 2 seconds.
   const indexing = videos.some((v) => v.status === "indexing");
@@ -49,7 +65,7 @@ export default function App() {
   const runSearch = (q, verify) => {
     cancelSearch.current?.();
     setSearch({ ...IDLE, status: "running" });
-    cancelSearch.current = streamSearch({ q, videoId: scopeId, verify }, (event) => {
+    cancelSearch.current = streamSearch({ q, videoId: scope, verify }, (event) => {
       if (event.type === "step") {
         setSearch((s) => ({
           ...s,
@@ -82,12 +98,17 @@ export default function App() {
 
   const active = videos.find((v) => v.video_id === activeId) ?? null;
   const ready = videos.filter((v) => v.status === "ready");
+  // The public demo searches one video at a time (the one in the player); locally "all videos" is allowed.
+  const scope = cfg.public ? scopeId ?? activeId : scopeId;
+  const scopeVideo = videos.find((v) => v.video_id === scope);
+  const canSearch = cfg.public ? scopeVideo?.status === "ready" : ready.length > 0;
 
   return (
     <div className="app">
       <Library
         videos={videos}
-        scopeId={scopeId}
+        scopeId={scope}
+        showAll={!cfg.public}
         onSelect={selectVideo}
         onAdd={() => setAdding(true)}
         onChanged={refresh}
@@ -101,10 +122,20 @@ export default function App() {
 
         {loadError && <p className="banner banner-error">{loadError}</p>}
 
+        {cfg.public && !loadError && (
+          <p className="banner banner-note">
+            Public demo. It runs on one shared free Gemini key, so videos are limited to {cfg.max_minutes} minutes,{" "}
+            {cfg.max_videos} per visitor, and {cfg.daily_left} new videos are left today.
+          </p>
+        )}
+
         {videos.length === 0 && !loadError ? (
           <section className="empty">
             <h2>Add your first video</h2>
-            <p>Paste a YouTube link or upload a file. Gemini watches it once, then every search is instant.</p>
+            <p>
+              {cfg.uploads ? "Paste a YouTube link or upload a file." : "Paste a YouTube link."} Gemini watches it once,
+              then every search is instant.
+            </p>
             <button className="btn btn-primary" onClick={() => setAdding(true)}>
               Add video
             </button>
@@ -112,8 +143,8 @@ export default function App() {
         ) : (
           <>
             <SearchPanel
-              disabled={ready.length === 0}
-              scopeLabel={scopeId ? videos.find((v) => v.video_id === scopeId)?.title : "all videos"}
+              disabled={!canSearch}
+              scopeLabel={scope ? scopeVideo?.title : "all videos"}
               search={search}
               onSearch={runSearch}
             />
@@ -127,6 +158,7 @@ export default function App() {
 
       {adding && (
         <AddVideoDialog
+          cfg={cfg}
           onClose={() => setAdding(false)}
           onAdded={(video) => {
             setAdding(false);
